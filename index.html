@@ -2166,7 +2166,7 @@ const Core = (() => {
       botOwnLede: n => `${n} spielt wie du und aktualisiert sich selbst mit deinen neuen Runden.`,
       botLevelsK: 'Stufen', botGamesN: n => (n === 1 ? '1 Partie' : `${n} Partien`), botStand: 'Stand', botNext: x => `nächste Aktualisierung ${x}`,
       botCmpHead: 'Bot und du im 60-Sekunden-Lauf', botCmpBot: 'Bot', botCmpYou: 'Du', botCmpRuns: n => (n === 1 ? '1 Lauf' : `${n} Läufe`),
-      botCmpNote: 'Richtige pro Lauf. Du: Schnitt deiner 60-Sekunden-Läufe der letzten 30 Tage im aktuellen Aufgabensatz. Bot: 40 Läufe je Stufe ohne Uhr gespielt, aus den Runden dieses Kontos, Solo und Duell im selben Verhältnis wie bei dir.',
+      botCmpNote: 'Richtige pro Lauf. Du: Schnitt deiner letzten 10 Läufe über 60 Sekunden im aktuellen Aufgabensatz (–: weniger als 3). Bot: 40 Läufe je Stufe ohne Uhr gespielt, aus den Runden dieses Kontos, auf deinem aktuellen Stand, Solo und Duell im selben Verhältnis wie bei dir.',
       botEvery: 'Aktualisierung', botDaily: 'Täglich', botWeekly: 'Wöchentlich',
       botSrcHead: 'Konten, aus denen er lernt', botSrcYou: '(dieses Konto)', botSrcRm: 'Entfernen', botSrcAdd: 'Weiteres eigenes Konto', botSrcAddBtn: 'Hinzufügen',
       botSrcNote: 'Danach im anderen Konto unter „Konto“ → „Dein Bot“ den Benutzernamen dieses Kontos eintragen. Erst dann fließen seine Runden ein.',
@@ -2616,7 +2616,7 @@ const Core = (() => {
       botOwnLede: n => `${n} plays like you and updates itself with your new rounds.`,
       botLevelsK: 'Levels', botGamesN: n => (n === 1 ? '1 game' : `${n} games`), botStand: 'Updated', botNext: x => `next update ${x}`,
       botCmpHead: 'The bot and you in a 60-second run', botCmpBot: 'Bot', botCmpYou: 'You', botCmpRuns: n => (n === 1 ? '1 run' : `${n} runs`),
-      botCmpNote: 'Correct answers per run. You: average of your 60-second runs in the last 30 days on the current task set. Bot: 40 runs per level, played without a clock from this account’s rounds, solo and duel in the same proportion as yours.',
+      botCmpNote: 'Correct answers per run. You: average of your latest 10 runs of 60 seconds on the current task set (–: fewer than 3). Bot: 40 runs per level, played without a clock from this account’s rounds, at your current level, solo and duel in the same proportion as yours.',
       botEvery: 'Updates', botDaily: 'Daily', botWeekly: 'Weekly',
       botSrcHead: 'Accounts it learns from', botSrcYou: '(this account)', botSrcRm: 'Remove', botSrcAdd: 'Another account of yours', botSrcAddBtn: 'Add',
       botSrcNote: 'Then, in the other account, enter this account’s username under “Account” → “Your bot”. Only then do its rounds go in.',
@@ -3066,7 +3066,7 @@ const Core = (() => {
       botOwnLede: n => `${n} 和你玩法一样，并会用你的新回合自动更新。`,
       botLevelsK: '级别', botGamesN: n => `${n} 局`, botStand: '更新于', botNext: x => `下次更新${x}`,
       botCmpHead: '60 秒赛中的机器人和你', botCmpBot: '机器人', botCmpYou: '你', botCmpRuns: n => `${n} 轮`,
-      botCmpNote: '每轮答对数。你：最近 30 天当前题库中 60 秒赛的平均值。机器人：每个级别不计时模拟 40 轮，数据来自这个账户的回合，单人和对决的比例与你相同。',
+      botCmpNote: '每轮答对数。你：当前题库中最近 10 轮 60 秒赛的平均值（–：不足 3 轮）。机器人：每个级别不计时模拟 40 轮，数据来自这个账户的回合，按你当前的水平，单人和对决的比例与你相同。',
       botEvery: '更新频率', botDaily: '每天', botWeekly: '每周',
       botSrcHead: '它学习的账户', botSrcYou: '（本账户）', botSrcRm: '移除', botSrcAdd: '你的另一个账户', botSrcAddBtn: '添加',
       botSrcNote: '然后在另一个账户的“账户”→“你的机器人”中输入本账户的用户名。之后它的回合才会被使用。',
@@ -3304,7 +3304,7 @@ const Core = (() => {
   const withUnit = label => (lang === 'zh' ? `${label}（${t('seconds')}）` : `${label} (${t('seconds')})`);
 
   /* Raise with every release, so you can see whether a device already has the newest version. */
-  const APP_VERSION = '1.48';
+  const APP_VERSION = '1.49';
 
   /* ----- formatting ----- */
   const dec = s => (lang === 'de' ? String(s).replace('.', ',') : String(s));
@@ -5757,6 +5757,11 @@ const Core = (() => {
         if (!gl.has(k)) gl.set(k, []);
         gl.get(k).push({ r, m: mean(v), n: v.length });
       }
+      const now = {};   // the current level per level and input: the last 10 rounds (1.49)
+      for (const [k, list] of gl) {
+        const last = list.slice(-10), w = last.reduce((p, y) => p + y.n, 0);
+        now[k] = w ? last.reduce((p, y) => p + y.n * y.m, 0) / w : 0;
+      }
       for (const list of gl.values()) {
         const tot = list.reduce((p, y) => p + y.n, 0), avg = list.reduce((p, y) => p + y.n * y.m, 0) / tot;
         list.forEach((x, i) => {
@@ -5803,7 +5808,7 @@ const Core = (() => {
           const ok = okItem(it) && b0 != null && !cut;
           const rel = ok && !it.s ? lr(it) - b0 : null;
           if (ok) {
-            const x = { r, it, L, inp, cx, rel, s: it.s ? 1 : 0, miss: !it.s && (num(it.c) > 0 || (Array.isArray(it.nm) && it.nm.length > 0)), at, hour, sp };
+            const x = { r, it, L, inp, cx, rel, tr: trend.get(r) || 0, s: it.s ? 1 : 0, miss: !it.s && (num(it.c) > 0 || (Array.isArray(it.nm) && it.nm.length > 0)), at, hour, sp };
             tasks.push(x); mine.push(x);
           }
           hist.push(it.s ? null : rel != null ? rel : 0);   // a skip counts as slow, a task without an estimate as usual
@@ -5812,7 +5817,7 @@ const Core = (() => {
           prev = it;
         }
       }
-      return { tasks, base };
+      return { tasks, base, now };
     }
     function solve(A, y) {   // Gaussian elimination with partial pivoting (small symmetric systems)
       const n = y.length, M = A.map((row, i) => row.concat([y[i]]));
@@ -5938,7 +5943,8 @@ const Core = (() => {
      Playing a task: the bot draws whether it skips (from similar episodes: same kind, similar estimate, the same task text
      counts six times, recent ones more; then the situation's odds), then one episode with that outcome, and plays it
      scaled to the new task: thinking time × (estimate ratio)^slope (the player's own, per level), typing time × (answer length ratio), the episode's own
-     situation and form taken out and the bot's current ones put in. Near misses and tries are typed and deleted again. */
+     situation and form taken out and the bot's current ones put in, and (1.49) moved from the player's level at the time to the
+     current level (the last 10 rounds on that level and input), so the bot plays like the player now. Near misses and tries are typed and deleted again. */
   const BotAI = (() => {
     const CAP = 3500, PER = 200, HALF = 30, MIN_EP = 40, PV = 1, Q_MAX = 600;
     const NM = ['carry', 'one', 'swap', 'sign', 'est', 'other'];
@@ -5992,7 +5998,7 @@ const Core = (() => {
         const nk = Array.isArray(it.nm) && it.nm.length && Number.isFinite(+it.av) ? 1 + NM.indexOf(nmKind(+it.nm[0], +it.av, Core.TOL_LEVELS.includes(x.L))) : 0;
         const t0 = Math.round(num(it.t)), f0 = Number.isFinite(+it.f) ? Math.round(Math.min(+it.f, t0)) : Math.round(0.55 * t0);
         E.push([x.L, x.inp, opI.get(it.o), Math.round(+it.e * 100), t0, f0, Math.min(9, num(it.c)), x.s, nk, Math.min(9, num(it.g)),
-          Math.round(100 * weight(x)), x.cx, Math.round(100 * (M.fm.get(x.r) || 0)), qi, ansLen(it.a), num(x.r.ts)]);
+          Math.round(100 * weight(x)), x.cx, Math.round(100 * (M.fm.get(x.r) || 0)), qi, ansLen(it.a), num(x.r.ts), Math.round(100 * x.tr)]);
       }
       const im = {}, lv = {};
       for (const e of E) { im[e[1]] = (im[e[1]] || 0) + e[10]; const c = lv[e[0]] || (lv[e[0]] = [0, 0]); c[e[1]]++; }   // episodes per level: [keyboard, touch]
@@ -6027,7 +6033,9 @@ const Core = (() => {
         const R = M.rates[b], odds = p => p / (1 - p);
         sx[b] = [r3(odds(clamp(R.skip, 0.001, 0.95)) / odds(clamp(M.p0, 0.001, 0.95))), R.n];
       }
-      const p = { v: PV, ops, qs: qList, E, rh, bx, sx, sl, sk, tau: r3(M.tau), nr: M.nr, im };
+      const tn = {};
+      for (const [k, v] of Object.entries(P.now)) if (/^\d-[01]$/.test(k)) tn[k] = r3(v);
+      const p = { v: PV, ops, qs: qList, E, rh, bx, sx, sl, sk, tn, tau: r3(M.tau), nr: M.nr, im };
       return { p, m: { lv, n: E.length, im } };
     }
     /* several shares (the owner's and the linked accounts') into one model ready to play */
@@ -6044,7 +6052,9 @@ const Core = (() => {
           const t0 = clamp(num(a[4]), 150, 600000);
           E.push({ L, inp, op: String(ops[num(a[2])] || ''), e: num(a[3]) / 100, t: t0, f: clamp(num(a[5]), 0, t0), c: clamp(num(a[6]), 0, 9), s: a[7] ? 1 : 0,
             nk: clamp(num(a[8]), 0, NM.length), g: clamp(num(a[9]), 0, 9), w: clamp(num(a[10]), 1, 100) / 100, cx: num(a[11]) & 511,
-            fm: clamp(num(a[12]), -150, 150) / 100, q: num(a[13]) >= 0 && ql[num(a[13])] ? String(ql[num(a[13])]) : '', al: clamp(num(a[14]), 1, 8), ts: num(a[15]) });
+            fm: clamp(num(a[12]), -150, 150) / 100, q: num(a[13]) >= 0 && ql[num(a[13])] ? String(ql[num(a[13])]) : '', al: clamp(num(a[14]), 1, 8), ts: num(a[15]),
+            // from the level at the time to the current level (1.49; shares from 1.46–1.48 have neither, then nothing moves)
+            lift: a.length > 16 && p.tn && Number.isFinite(+p.tn[L + '-' + inp]) ? clamp(+p.tn[L + '-' + inp] - num(a[16]) / 100, -0.7, 0.7) : 0 });
         }
         const n = p.E.length;
         for (const k of [0, 1]) {
@@ -6180,7 +6190,7 @@ const Core = (() => {
       const ep = i >= 0 ? cand[i] : { t: est * 1000, f: est * 550, c: 0, s: 0, nk: 0, g: 0, e: est, cx: 0, fm: 0, al: 2 };
       if (i < 0) skip = false;
       const ratio = clamp(Math.pow(est / ep.e, M.sl[L] || 0.7), 0.4, 2.5);
-      const adj = clamp(-ep.fm + run.form + Style.sumBits(M.beta, cx, BITS) - Style.sumBits(M.beta, ep.cx, BITS), -0.8, 0.8);
+      const adj = clamp((ep.lift || 0) - ep.fm + run.form + Style.sumBits(M.beta, cx, BITS) - Style.sumBits(M.beta, ep.cx, BITS), -0.8, 0.8);
       const f = Math.exp(adj);
       const al = typed(task).length;
       let think = ep.f * ratio * f, entry = skip ? 0 : Math.max(0, ep.t - ep.f) * clamp(al / Math.max(1, ep.al), 0.5, 2) * f;
@@ -11027,12 +11037,13 @@ const Core = (() => {
     const inText = ms => { const h = Math.max(0, ms) / 3600000; return h < 1 ? t('inMin', Math.max(1, Math.round(h * 60))) : h < 48 ? t('inH', Math.round(h)) : t('inD', Math.round(h / 24)); };
     function compare() {   // the bot (from this account's share, played without clocks) against the account's own recent 60-second runs
       if (cmp) return cmp;
-      const st = Acct.state, M = BotAI.merge([share(st.uid).p]), since = Date.now() - 30 * 864e5;
-      // like for like (1.47): only runs of the current task set, and the bot plays solo and duel runs in the same proportion
-      const runs = LS.get('kr.rounds', []).filter(r => r.acct === st.uid && r.mode === 'sprint' && (r.durationMs || 60000) === 60000 &&
-        Date.parse(r.startedAt) >= since && num(r.ts) === Core.TASKSET);
+      const st = Acct.state, M = BotAI.merge([share(st.uid).p]);
+      // like for like (1.47): only runs of the current task set, and the bot plays solo and duel runs in the same proportion;
+      // since 1.49 against the latest 10 runs, because the bot plays at the current level
+      const runs = LS.get('kr.rounds', []).filter(r => r.acct === st.uid && r.mode === 'sprint' && (r.durationMs || 60000) === 60000 && num(r.ts) === Core.TASKSET)
+        .sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)));
       cmp = M.levels.map(L => {
-        const mine = runs.filter(r => r.level === L), nd = mine.length ? Math.round(40 * mine.filter(r => r.duel).length / mine.length) : 0;
+        const mine = runs.filter(r => r.level === L).slice(-10), nd = mine.length ? Math.round(40 * mine.filter(r => r.duel).length / mine.length) : 0;
         const sim = ((nd ? nd * BotAI.simulate(M, L, 60000, nd, 7, true) : 0) + (40 - nd ? (40 - nd) * BotAI.simulate(M, L, 60000, 40 - nd, 11, false) : 0)) / 40;
         return [L, sim, mine.length >= 3 ? mine.reduce((p, r) => p + num(r.score), 0) / mine.length : null, mine.length];
       });
