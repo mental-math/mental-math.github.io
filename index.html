@@ -2156,7 +2156,7 @@ const Core = (() => {
       botLoadFail: 'Der Bot ließ sich gerade nicht laden. Versuch es gleich noch einmal.',
       botDuelLede: (n, o) => `${n} spielt wie ${o}: Tempo, Fehler, Zögern und Überspringen stammen aus den gespeicherten Runden von ${o}. Das Duell zählt für dein Duell-Rating.`,
       botPlay: n => `Gegen ${n} spielen`, botLvNote: (n, lv) => `${n} spielt Stufe ${lv}.`, botReady: n => `${n} ist bereit.`,
-      vfBot: 'Bot', vfOppBot: n => `${n} ist ein Bot.`,
+      vfBot: 'Bot', vfOppBot: n => `${n} ist ein Bot.`, botRatingRes: (n, r, d) => `Duell-Rating von ${n}: ${r} (${d})`,
       botSavedNote: 'Gegen einen Bot zählt dein Lauf fürs Duell-Rating, aber nicht fürs Solo-Rating.',
       botsHead: 'Gegen einen Bot', botLevels: lv => `Stufe ${lv}`, botPlayShort: 'Spielen',
       botSect: 'Dein Bot', botChecking: 'Wird abgefragt …',
@@ -2606,7 +2606,7 @@ const Core = (() => {
       botLoadFail: 'The bot couldn’t be loaded just now. Try again in a moment.',
       botDuelLede: (n, o) => `${n} plays like ${o}: pace, mistakes, hesitation and skips come from ${o}’s saved rounds. The duel counts for your duel rating.`,
       botPlay: n => `Play ${n}`, botLvNote: (n, lv) => `${n} plays level ${lv}.`, botReady: n => `${n} is ready.`,
-      vfBot: 'bot', vfOppBot: n => `${n} is a bot.`,
+      vfBot: 'bot', vfOppBot: n => `${n} is a bot.`, botRatingRes: (n, r, d) => `${n}’s duel rating: ${r} (${d})`,
       botSavedNote: 'Against a bot your run counts for the duel rating, not for the solo rating.',
       botsHead: 'Against a bot', botLevels: lv => `Level ${lv}`, botPlayShort: 'Play',
       botSect: 'Your bot', botChecking: 'Checking …',
@@ -3056,7 +3056,7 @@ const Core = (() => {
       botLoadFail: '暂时无法加载机器人，请稍后再试。',
       botDuelLede: (n, o) => `${n} 的玩法和 ${o} 一样：速度、错误、犹豫和跳过都来自 ${o} 保存的回合。这场对决计入你的对决等级分。`,
       botPlay: n => `和 ${n} 对决`, botLvNote: (n, lv) => `${n} 玩第 ${lv} 级。`, botReady: n => `${n} 已准备好。`,
-      vfBot: '机器人', vfOppBot: n => `${n} 是机器人。`,
+      vfBot: '机器人', vfOppBot: n => `${n} 是机器人。`, botRatingRes: (n, r, d) => `${n} 的对决等级分：${r}（${d}）`,
       botSavedNote: '和机器人对决时，你的这一轮计入对决等级分，不计入单人等级分。',
       botsHead: '和机器人对决', botLevels: lv => `第 ${lv} 级`, botPlayShort: '开始',
       botSect: '你的机器人', botChecking: '正在查询…',
@@ -3304,7 +3304,7 @@ const Core = (() => {
   const withUnit = label => (lang === 'zh' ? `${label}（${t('seconds')}）` : `${label} (${t('seconds')})`);
 
   /* Raise with every release, so you can see whether a device already has the newest version. */
-  const APP_VERSION = '1.47';
+  const APP_VERSION = '1.48';
 
   /* ----- formatting ----- */
   const dec = s => (lang === 'de' ? String(s).replace('.', ',') : String(s));
@@ -5962,9 +5962,10 @@ const Core = (() => {
       const med = qs(per, 0.5);
       return { g: [0.1, 0.25, 0.5, 0.75, 0.9].map(p => Math.round(qs(per, p))), hp: 0.03, hg: [Math.round(3 * med), Math.round(6 * med)], dg: Math.round(0.7 * med), n: per.length, kt: 0 };
     }
-    /* one account's share, from its rounds and duel records (rounds against a bot are left out) */
+    /* one account's share, from its rounds and duel records; since 1.48 also the account's own runs against bots (owner: the bot
+       learns from how he plays against it). The bot's own moves are never stored anywhere, so they can't feed back into it. */
     function build(rounds, duels, now = Date.now()) {
-      const P = Style.prep(rounds.filter(r => !r.bot), duels);
+      const P = Style.prep(rounds, duels);
       const M = Style.model(P);
       const tasks = P.tasks.filter(x => x.inp <= 1);
       const ops = [], opI = new Map(), qCount = new Map();
@@ -7008,10 +7009,20 @@ const Core = (() => {
     };
     if (D.cfg.format === 'buzz') Object.assign(rec, { buzzEnd: D.cfg.buzzEnd, buzzN: pickBuzzN(D.cfg.buzzN) });
     if (D.opp.vf === 'ok') rec.opp.v = true;   // the opponent's name was verified (✓)
-    if (D.bot) { rec.opp.bot = D.bot.id; if (Bots) Bots.report(D.bot.id, 1 - outcome, before, D.cfg.format, D.oppFinal.level); }   // the bot's rating (1.46)
+    let botMove = null;
+    if (D.bot) {   // the bot's rating (1.46), with its change shown at once like a person's (1.48)
+      rec.opp.bot = D.bot.id;
+      if (Bots) Bots.report(D.bot.id, 1 - outcome, before, D.cfg.format, D.oppFinal.level);
+      const bp = D.botP;
+      if (bp) {
+        const E = 1 / (1 + Math.pow(10, (before - bp.rating) / 400)), was = bp.rating;
+        bp.rating = Math.round(bp.rating + (bp.n < 10 ? 40 : 24) * ((1 - outcome) - E)); bp.n++;
+        botMove = { was, now: bp.rating };
+      }
+    }
     if (unrFor(D.cfg, D.me, D.opp)) rec.ur = true;   // unrated (1.37): kept in the list, left out of the duel rating and the record
     Duels.add(rec);
-    D.last = { rec, before, after: Duels.rating(D.me.name) };
+    D.last = { rec, before, after: Duels.rating(D.me.name), bot: botMove };
     statsCache = null;
     D.st = 'result';
     show('duel'); renderDuel();
@@ -7067,7 +7078,7 @@ const Core = (() => {
      guest: hello → (settings) → ready, then every round from the host's start. Its tasks come from the same generators and
      seeds as a person's would, so it gets exactly the same tasks. Its moves come from BotAI.plan with real timers.
      Always the same level and the same chess-clock time for both; rated. The person's run is saved with bot = the bot's id:
-     it counts for the duel rating, but not for the solo rating, not for the central data and not for any bot's data. */
+     it counts for the duel rating, but not for the solo rating and not for the central data; since 1.48 the bot learns from it. */
   function botLink(onMessage) {
     const id = 'kr_' + hex(crypto.getRandomValues(new Uint8Array(6))), pid = 'bot_' + hex(crypto.getRandomValues(new Uint8Array(6)));
     const LAT = 12;   // a little delay, as over a network, so nothing answers inside the sender's own call
@@ -7315,7 +7326,8 @@ const Core = (() => {
       if (D !== d) return;
       const link = botLink(m => { if (D === d) receive(m); });
       d.link = link; d.code = 'B' + randCode().slice(1); d.ek = ek.pair; d.ekPub = ek.pub;
-      const peer = botPeer(link, { name: d.bot.name, rating: B.rating, ek: bek.pub }, B.M);
+      d.botP = { name: d.bot.name, rating: B.rating, n: B.n, ek: bek.pub };   // the bot's side; its rating moves after every game
+      const peer = botPeer(link, d.botP, B.M);
       link.attach(peer);
       setMsg(); renderDuel();
       peer.start();
@@ -7565,6 +7577,7 @@ const Core = (() => {
         `<th class="n">${esc(buzz ? t('pointsCol') : t('score'))}</th>` + (buzz ? '' : `<th class="n">${esc(left ? t('leftCol') : rec.format === 'clock' ? t('clockCol') : race ? t('time') : t('perf'))}</th>`) + '</tr></thead><tbody>' +
         row(rec.me, rec.budget) + row(rec.opp, rec.oppBudget || rec.budget, rec.opp.bot ? 'bot' : rec.opp.v ? 'ok' : 'no') + '</tbody></table></div>' +
         `<p class="rating-msg">${esc(t('duelRating'))}: ${Math.round(after)} (${esc(rec.ur ? t('unrRes') : signed(Math.round(after) - Math.round(before)))})</p>` +
+        (D.last.bot ? `<p class="note">${esc(t('botRatingRes', rec.opp.name, D.last.bot.now, signed(D.last.bot.now - D.last.bot.was)))}</p>` : '') +
         `<p class="note">${esc(buzz ? t('duelSavedBz') : t('duelSaved'))}</p>` + (rec.opp.bot && !buzz ? `<p class="note">${esc(t('botSavedNote'))}</p>` : '') + '</div>';
       if (buzz) h += bzTasksHtml(D.bzLog, rec.me.level);
       let status = '';
@@ -10801,7 +10814,8 @@ const Core = (() => {
      on top of r, so a new result counts at once; the owner's devices fold them into the document at each update.
      Updates: after every account sync, an owner's or a linked account's device rebuilds and writes its share once the last
      one is older than the bot's interval (owner's choice: daily or weekly), and the owner's device then refreshes the bot
-     document. "Jetzt aktualisieren" does it at once. Rounds played against a bot never go into any bot's data. */
+     document. "Jetzt aktualisieren" does it at once. Since 1.48 new results also go into the stored rating at every tick of
+     the owner's devices, the lobby folds the newest ones in, and the account's own runs against bots are part of its share. */
   Bots = (() => {
     const A = Acct.api;
     const LIST_MS = 5 * 60000, LOAD_MS = 2 * 60000, MINE_MS = 10 * 60000, MAX_SRC = 3;
@@ -10841,7 +10855,11 @@ const Core = (() => {
       listing = (async () => {
         try {
           const j = await A.call(`${FS_BASE}/${A.DB()}/bots?pageSize=20&${A.kq()}`, { method: 'GET' });
-          list = ((j && j.documents) || []).map(parseBot).filter(b => b.owner && b.lv.length).sort((a, b) => b.r - a.r).slice(0, 10);
+          const all = ((j && j.documents) || []).map(parseBot).filter(b => b.owner && b.lv.length);
+          await Promise.all(all.map(async b => {   // the games since the owner's last update count at once (1.48), as for a person
+            try { const [r, n] = elo(b.r, b.n, await gamesAfter(b.id, b.gt)); b.r = Math.round(r); b.n = n; } catch (e) { /* the stored rating */ }
+          }));
+          list = all.sort((a, b) => b.r - a.r).slice(0, 10);
         } catch (e) { if (!list) list = []; }
         listAt = Date.now(); listing = null;
         if (Lobby) Lobby.render(true);
@@ -10901,7 +10919,8 @@ const Core = (() => {
               updateTransforms: [{ fieldPath: 'at', setToServerValue: 'REQUEST_TIME' }], currentDocument: { exists: false } }]);
           } catch (e) { if (e.code === 'net' || e.http >= 500) break; }   // offline or server trouble: later; refused ones are dropped
           LS.set('kr.botq', LS.get('kr.botq', []).slice(1));
-          loaded.delete(g.b);
+          loaded.delete(g.b); listAt = 0; mineAt = 0;
+          if (Lobby) setTimeout(() => refreshList(true), 300);
         }
       } finally { flushing = false; }
     }
@@ -10950,6 +10969,13 @@ const Core = (() => {
       list = null; loaded.delete(b.id);
     }
     /* the owner's device: playable levels from all linked shares, games folded into the rating */
+    async function foldOwner() {   // new games into the stored rating (1.48: at every tick, so the lobby shows it everywhere)
+      const b = my.bot, games = await gamesAfter(b.id, b.gt);
+      if (!games.length) return;
+      const [r, n] = elo(b.r, b.n, games);
+      b.r = Math.round(r); b.n = n; b.gt = games[games.length - 1].at;
+      await writeBot(b);
+    }
     async function refreshOwner() {
       const b = my.bot, uids = [b.id].concat(b.src.map(x => x[0]));
       const metas = await Promise.all(uids.map(u => getDoc('botsrc/' + encodeURIComponent(u), null, ['bot', 'm']).catch(() => null)));
@@ -10973,6 +10999,7 @@ const Core = (() => {
           if (!my) return;
           if (my.bot) {
             if (force || !my.src || my.src.bot !== my.uid || age(my.src.up) >= my.bot.every * 3600000 - 60000) { await publishShare(my.uid); await refreshOwner(); }
+            else await foldOwner();
           } else if (my.src && my.src.bot) {
             const b = my.target;
             if (b === false) { await dropShare(); return; }   // the bot is gone: take this account's share off
@@ -11002,7 +11029,7 @@ const Core = (() => {
       if (cmp) return cmp;
       const st = Acct.state, M = BotAI.merge([share(st.uid).p]), since = Date.now() - 30 * 864e5;
       // like for like (1.47): only runs of the current task set, and the bot plays solo and duel runs in the same proportion
-      const runs = LS.get('kr.rounds', []).filter(r => r.acct === st.uid && !r.bot && r.mode === 'sprint' && (r.durationMs || 60000) === 60000 &&
+      const runs = LS.get('kr.rounds', []).filter(r => r.acct === st.uid && r.mode === 'sprint' && (r.durationMs || 60000) === 60000 &&
         Date.parse(r.startedAt) >= since && num(r.ts) === Core.TASKSET);
       cmp = M.levels.map(L => {
         const mine = runs.filter(r => r.level === L), nd = mine.length ? Math.round(40 * mine.filter(r => r.duel).length / mine.length) : 0;
